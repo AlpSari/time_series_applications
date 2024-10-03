@@ -1,6 +1,9 @@
-from typing import Optional, Callable, Union, Tuple
+import json
+from typing import Optional, Callable, Union, Tuple, List
 
 import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 from torch.utils.data import Dataset
 
 
@@ -107,6 +110,85 @@ class SimpleDataSet(Dataset):
         if self.target_transform:
             y = self.target_transform(y)
         return x, y
+
+
+class DataLoaderNAB:
+
+    @staticmethod
+    def load_nab_dataset(root_dir, data_dir, label_json_file, window_json_file):
+        """
+        Load the NAB dataset from the specified directory and JSON files.
+        Args:
+            root_dir (str): The root directory where the data is stored.
+            data_dir (str): The directory containing the dataset CSV file.
+            label_json_file (str): The path to the JSON file containing anomaly labels.
+            window_json_file (str): The path to the JSON file containing anomaly windows.
+        Returns:
+            tuple: A tuple containing:
+                - data_ts (pd.DataFrame): The time series data with timestamps and values.
+                - anomaly_times (pd.Series): The timestamps of anomalies.
+                - anomaly_windows (list of pd.DatetimeIndex): The periods of anomaly windows.
+        """
+        data_path = root_dir + data_dir
+        data_ts = pd.read_csv(
+            data_path, parse_dates=["timestamp"], dtype={"value": np.float32}
+        )
+        # Load labels (point in time)
+        with open(label_json_file, "r") as key_file:
+            key = json.load(key_file)
+            anomaly_times = pd.to_datetime(key[data_dir])
+        # Load anomaly window (period)
+        with open(window_json_file, "r") as window_file:
+            windows = json.load(window_file)
+
+            anomaly_windows = [pd.to_datetime(window) for window in windows[data_dir]]
+
+        return data_ts, anomaly_times, anomaly_windows
+
+    def load_data(data_csv_path, labels_json_path, windows_json_path):
+        """
+        Helper function to load NAB data in custom format.
+
+        Args:
+            data_csv_path (str): Path to the CSV file containing the time series data.
+            labels_json_path (str): Path to the JSON file containing anomaly labels.
+            windows_json_path (str): Path to the JSON file containing anomaly windows.
+
+        Returns:
+            tuple: A tuple containing:
+                - df (pd.DataFrame): DataFrame with the time series data.
+                - anomaly_times (pd.DatetimeIndex): DatetimeIndex of anomaly times.
+                - anomaly_windows (list of pd.DatetimeIndex): List of DatetimeIndex objects for anomaly windows.
+        """
+        df = pd.read_csv(
+            data_csv_path, parse_dates=["timestamp"], dtype={"value": np.float32}
+        )
+        with open(labels_json_path, "r") as f:
+            anomaly_times_dict = json.load(f)
+        anomaly_times = pd.to_datetime(anomaly_times_dict["anomaly"])
+        with open(windows_json_path, "r") as f:
+            anomaly_windows_dict = json.load(f)
+        anomaly_windows = [
+            pd.to_datetime(window) for window in anomaly_windows_dict["anomaly_windows"]
+        ]
+        return df, anomaly_times, anomaly_windows
+
+    @staticmethod
+    def plot_series(df, anomaly_times: pd.Series, anomaly_windows: List[pd.Series]):
+        """Helper function to plot the loaded time series data with anomalies."""
+        n_anomalies = sum(df["timestamp"].isin(anomaly_times))
+        plt.plot(df["timestamp"], df["value"], label="value")
+        for window in anomaly_windows:
+            plt.axvspan(window[0], window[1], color="red", alpha=0.3)
+        plt.scatter(
+            anomaly_times,
+            df.loc[df["timestamp"].isin(anomaly_times), "value"],
+            color="red",
+            label="anomaly",
+        )
+        plt.legend()
+        plt.title(f"Anomalies: {n_anomalies}")
+        plt.show()
 
 
 def main():
