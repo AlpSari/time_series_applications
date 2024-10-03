@@ -3,12 +3,22 @@ from typing import Optional, Callable, Union, Tuple
 import numpy as np
 from torch.utils.data import Dataset
 
+
 class DataPreprocessor:
     def __init__(self) -> None:
-       pass
+        pass
 
     @staticmethod
-    def create_NARX_model(u, y, n_ar, n_b, return_history=False, n_hist_u=0, n_hist_y=0, output_as_tuple=False):
+    def create_NARX_model(
+        u,
+        y,
+        n_ar,
+        n_b,
+        return_history=False,
+        n_hist_u=0,
+        n_hist_y=0,
+        output_as_tuple=False,
+    ):
         """
         Creates a NARX (Nonlinear AutoRegressive with eXogenous inputs) model dataset.
         Parameters:
@@ -30,18 +40,27 @@ class DataPreprocessor:
         h_data = []
         y_data = []
 
-        n_u = (n_b + n_hist_u)
-        n_y = (n_ar + n_hist_y)
+        n_u = n_b + n_hist_u
+        n_y = n_ar + n_hist_y
         if n_u > n_y:
             first_idx = n_u
         else:
             first_idx = n_y + 1
 
         for k in range(first_idx, len(y)):
-            x_data.append(np.concatenate((u[k+1-n_b:k+1], y[k-n_ar:k])))  # system input
+            x_data.append(
+                np.concatenate((u[k + 1 - n_b : k + 1], y[k - n_ar : k]))
+            )  # system input
             y_data.append(y[k])  # system output
             if return_history:
-                h_data.append(np.concatenate((u[k+1-n_b-n_hist_u:k+1-n_b], y[k-n_ar-n_hist_y:k-n_ar])))  # system input-output history
+                h_data.append(
+                    np.concatenate(
+                        (
+                            u[k + 1 - n_b - n_hist_u : k + 1 - n_b],
+                            y[k - n_ar - n_hist_y : k - n_ar],
+                        )
+                    )
+                )  # system input-output history
 
         make_at_least_2d = lambda x: x[:, np.newaxis] if x.ndim == 1 else x
         x_data = make_at_least_2d(np.array(x_data))
@@ -56,13 +75,14 @@ class DataPreprocessor:
             return x_data, y_data
 
 
-
 class SimpleDataSet(Dataset):
-    def __init__(self,
-                 x_data: Union[np.ndarray, Tuple[np.ndarray, ...]],
-                 y_data: np.ndarray,
-                 transform: Optional[Callable] = None,
-                 target_transform: Optional[Callable] = None) -> None:
+    def __init__(
+        self,
+        x_data: Union[np.ndarray, Tuple[np.ndarray, ...]],
+        y_data: np.ndarray,
+        transform: Optional[Callable] = None,
+        target_transform: Optional[Callable] = None,
+    ) -> None:
         self.x_data = x_data
         self.y_data = y_data
         self.transform = transform
@@ -73,7 +93,10 @@ class SimpleDataSet(Dataset):
 
     def __getitem__(self, idx: int) -> Tuple[np.ndarray, np.ndarray]:
         if isinstance(self.x_data, tuple):
-            x = tuple(x_part[idx] if x_part.ndim == 1 else x_part[idx, :] for x_part in self.x_data)
+            x = tuple(
+                x_part[idx] if x_part.ndim == 1 else x_part[idx, :]
+                for x_part in self.x_data
+            )
         else:
             x = self.x_data[idx] if self.x_data.ndim == 1 else self.x_data[idx, :]
 
@@ -88,21 +111,23 @@ class SimpleDataSet(Dataset):
 
 def main():
     u = np.arange(0, 9)
-    y = np.arange(9,18)
+    y = np.arange(9, 18)
     print(u)
     print(y)
 
-    x, h, y_a = DataPreprocessor.create_NARX_model(u, y, n_ar= 0, n_b=3, return_history=True,n_hist_u=3, n_hist_y= 3)
+    x, h, y_a = DataPreprocessor.create_NARX_model(
+        u, y, n_ar=0, n_b=3, return_history=True, n_hist_u=3, n_hist_y=3
+    )
     print(x)
     print(h)
     print(y_a)
 
-    ds1 = SimpleDataSet((x,h), y_a)
+    ds1 = SimpleDataSet((x, h), y_a)
     ds2 = SimpleDataSet(x, y_a)
 
     print(ds1[0:2])
     print(ds2[0:2])
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
