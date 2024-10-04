@@ -43,9 +43,11 @@ class LSTMWithEncoder(nn.Module):
         )
         self.h2o = net(hidden_size + self.input_size, self.output_size)  # i)
 
-    def forward(self, inputs, hist):
+    def forward(self, inputs, hist=None):
         # inputs: [n_batch, n_sequence] (assumed 1 feature)
         # hist: [n_batch, n_history]
+        if hist is None:
+            hist = torch.zeros(inputs.shape[0], 0, dtype=inputs.dtype, device=inputs.device)
         h_0 = self.encoder(hist)[None, :, :]  # [1, n_batch, self.hidden_size]
         c_0 = torch.zeros(h_0.shape)  # [1, n_batch, self.hidden_size]
 
