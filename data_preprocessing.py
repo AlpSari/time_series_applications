@@ -174,21 +174,44 @@ class DataLoaderNAB:
         return df, anomaly_times, anomaly_windows
 
     @staticmethod
-    def plot_series(df, anomaly_times: pd.Series, anomaly_windows: List[pd.Series]):
+    def plot_series(
+        df: pd.DataFrame,
+        anomaly_times: pd.Series,
+        anomaly_windows: List[pd.Series],
+        ax=None
+    ):
         """Helper function to plot the loaded time series data with anomalies."""
         n_anomalies = sum(df["timestamp"].isin(anomaly_times))
-        plt.plot(df["timestamp"], df["value"], label="value")
-        for window in anomaly_windows:
-            plt.axvspan(window[0], window[1], color="red", alpha=0.3)
-        plt.scatter(
+
+        if ax is None:
+            fig, ax = plt.subplots()
+
+        # Plot time series
+        ax.plot(df["timestamp"], df["value"], color='blue', label="data")
+
+        # Plot anomaly windows
+        for w_idx, window in enumerate(anomaly_windows):
+            if w_idx == 0:
+                ax.axvspan(window[0], window[1], color="black", alpha=0.3, label="anomaly window")
+            else:
+                ax.axvspan(window[0], window[1], color="black", alpha=0.3)
+
+        # Plot anomalies
+        ax.scatter(
             anomaly_times,
             df.loc[df["timestamp"].isin(anomaly_times), "value"],
-            color="red",
+            color="black",
             label="anomaly",
         )
-        plt.legend()
-        plt.title(f"Anomalies: {n_anomalies}")
-        plt.show()
+
+        # Styling
+        ax.legend()
+        ax.set_title(f"Anomalies: {n_anomalies}")
+
+        if ax is None:
+            plt.show()
+
+        return ax
 
 
 def main():
