@@ -77,6 +77,16 @@ class DataPreprocessor:
         else:
             return x_data, y_data
 
+    @staticmethod
+    def create_AE_model(y, n_window=1):
+        make_at_least_2d = lambda x: x[:, np.newaxis] if x.ndim == 1 else x
+        y_data = []
+        for k in range(0, len(y)-n_window+1):
+            y_data.append(y[k: k+n_window])
+        y_data = make_at_least_2d(np.array(y_data))
+        return y_data
+
+
 
 class SimpleDataSet(Dataset):
     def __init__(
