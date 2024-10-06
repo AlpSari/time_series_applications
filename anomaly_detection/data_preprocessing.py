@@ -8,68 +8,80 @@ from torch.utils.data import Dataset
 
 
 class DataPreprocessor:
+    """Class to store convenience functions for data preprocessing."""
     def __init__(self) -> None:
         pass
 
     @staticmethod
     def create_NARX_model(
-        u,
-        y,
-        n_ar,
-        n_b,
-        return_history=False,
-        n_hist_u=0,
-        n_hist_y=0,
-        output_as_tuple=False,
-    ):
+        u: np.ndarray,
+        y: np.ndarray,
+        n_ar: int,
+        n_b: int,
+        return_history: bool = False,
+        n_hist_u: int = 0,
+        n_hist_y: int = 0,
+        output_as_tuple: bool = False
+    ) -> Union[Tuple[np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray, np.ndarray]]:
         """
         Creates a NARX (Nonlinear AutoRegressive with eXogenous inputs) model dataset.
+
+        NARX Model is defined as:
+            y(k) = f(y(k-1), y(k-2), ..., y(k-n_ar), u(k), u(k-1), u(k-2), ..., u(k-n_b))
+
         Parameters:
-        u (array-like): The input time series data.
-        y (array-like): The output time series data.
-        n_ar (int): The number of autoregressive terms (past outputs) to include.
-        n_b (int): The number of exogenous input terms (past inputs) to include.
-        n_hist_u (int, optional): The number of historical input terms to include. Default is 0.
-        n_hist_y (int, optional): The number of historical output terms to include. Default is 0.
-        return_history (bool, optional): Whether to return the historical input-output data. Default is False.
-        output_as_tuple (bool, optional): Whether to return the output as a tuple. Default is False.
+        - u (np.ndarray): The input time series data.
+        - y (np.ndarray): The output time series data.
+        - n_ar (int): The number of autoregressive terms (past outputs) to include.
+        - n_b (int): The number of exogenous input terms (past inputs) to include.
+        - return_history (bool, optional): Whether to return the historical input-output data. Default is False.
+        - n_hist_u (int, optional): The number of historical input terms to include. Default is 0.
+        - n_hist_y (int, optional): The number of historical output terms to include. Default is 0.
+        - output_as_tuple (bool, optional): Whether to return the output as a tuple. Default is False.
+
         Returns:
-        tuple: A tuple containing three numpy arrays:
+        - Tuple[np.ndarray, np.ndarray] or Tuple[np.ndarray, np.ndarray, np.ndarray]:
             - x_data: The input data for the NARX model.
-            - h_data: The historical input-output data (if return_history is True).
             - y_data: The output data for the NARX model.
+            - h_data (optional): The historical input-output data (if return_history is True).
         """
         x_data = []
-        h_data = []
         y_data = []
+        h_data = []
 
-        n_u = n_b + n_hist_u
-        n_y = n_ar + n_hist_y
-        if n_u > n_y:
-            first_idx = n_u
-        else:
-            first_idx = n_y + 1
-
-        for k in range(first_idx, len(y)):
-            x_data.append(
-                np.concatenate((u[k + 1 - n_b : k + 1], y[k - n_ar : k]))
-            )  # system input
-            y_data.append(y[k])  # system output
-            if return_history:
-                h_data.append(
-                    np.concatenate(
-                        (
-                            u[k + 1 - n_b - n_hist_u : k + 1 - n_b],
-                            y[k - n_ar - n_hist_y : k - n_ar],
-                        )
-                    )
-                )  # system input-output history
-
-        make_at_least_2d = lambda x: x[:, np.newaxis] if x.ndim == 1 else x
-        x_data = make_at_least_2d(np.array(x_data))
-        y_data = make_at_least_2d(np.array(y_data))
+        # Define the total number of input and output lags
         if return_history:
-            h_data = make_at_least_2d(np.array(h_data))
+            total_u_lags = n_b + n_hist_u
+            total_y_lags = n_ar + n_hist_y
+        else:
+            total_u_lags = n_b
+            total_y_lags = n_ar
+
+        # Determine the first valid index based on max lags
+        first_idx = max(total_u_lags-1, total_y_lags)
+
+        # Loop to collect x_data (inputs), y_data (targets), and h_data (history, if needed)
+        for k in range(first_idx, len(y)):
+            # x_data consists of recent input and output lags (NARX terms)
+            current_u_lags = u[k + 1 - n_b: k + 1] if n_b > 0 else np.array([])
+            current_y_lags = y[k - n_ar: k] if n_ar > 0 else np.array([])
+            x_data.append(np.concatenate((current_u_lags, current_y_lags)))
+
+            # y_data is the current target value y(t)
+            y_data.append(y[k])
+
+            # If history is requested, build the h_data
+            if return_history:
+                past_u_hist = u[k + 1 - n_b - n_hist_u: k + 1 - n_b] if n_hist_u > 0 else np.array([])
+                past_y_hist = y[k - n_ar - n_hist_y: k - n_ar] if n_hist_y > 0 else np.array([])
+                h_data.append(np.concatenate((past_u_hist, past_y_hist)))
+
+        # Convert lists to numpy arrays
+        x_data = DataPreprocessor._make_at_least_2d(np.array(x_data))
+        y_data = DataPreprocessor._make_at_least_2d(np.array(y_data))
+
+        if return_history:
+            h_data = DataPreprocessor._make_at_least_2d(np.array(h_data))
             if output_as_tuple:
                 return (x_data, h_data), y_data
             else:
@@ -79,13 +91,23 @@ class DataPreprocessor:
 
     @staticmethod
     def create_AE_model(y, n_window=1):
-        make_at_least_2d = lambda x: x[:, np.newaxis] if x.ndim == 1 else x
+        """
+        Creates a dataset for an Autoencoder (AE) model by generating overlapping windows of the input data.
+        Parameters:
+        y (array-like): The input time series data.
+        n_window (int, optional): The size of the window to create overlapping segments. Default is 1.
+        Returns:
+        numpy.ndarray: A 2D array where each row is a window of the input data.
+        """
         y_data = []
         for k in range(0, len(y)-n_window+1):
             y_data.append(y[k: k+n_window])
-        y_data = make_at_least_2d(np.array(y_data))
+        y_data = DataPreprocessor._make_at_least_2d(np.array(y_data))
         return y_data
 
+    @staticmethod
+    def _make_at_least_2d(x: np.ndarray) -> np.ndarray:
+        return x[:, np.newaxis] if x.ndim == 1 else x
 
 
 class SimpleDataSet(Dataset):
