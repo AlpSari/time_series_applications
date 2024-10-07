@@ -16,8 +16,8 @@ class DataPreprocessor:
     def create_NARX_model(
         u: np.ndarray,
         y: np.ndarray,
-        n_ar: int,
-        n_b: int,
+        n_b: int = 0,
+        n_ar: int = 0,
         return_history: bool = False,
         n_hist_u: int = 0,
         n_hist_y: int = 0,
@@ -27,19 +27,31 @@ class DataPreprocessor:
         Creates a NARX (Nonlinear AutoRegressive with eXogenous inputs) model dataset.
 
         NARX Model is defined as:
-            y(k) = f(y(k-1), y(k-2), ..., y(k-n_ar), u(k), u(k-1), u(k-2), ..., u(k-n_b))
+            y(k) = f(u(k), u(k-1), ..., u(k-(n_b-1)), y(k-1), y(k-2), ..., y(k-n_ar))
 
-        Parameters:
-        - u (np.ndarray): The input time series data.
-        - y (np.ndarray): The output time series data.
-        - n_ar (int): The number of autoregressive terms (past outputs) to include.
-        - n_b (int): The number of exogenous input terms (past inputs) to include.
-        - return_history (bool, optional): Whether to return the historical input-output data. Default is False.
-        - n_hist_u (int, optional): The number of historical input terms to include. Default is 0.
-        - n_hist_y (int, optional): The number of historical output terms to include. Default is 0.
-        - output_as_tuple (bool, optional): Whether to return the output as a tuple. Default is False.
+        Target vector: y(k)
+        Input vector: [u(k), u(k-1), ..., u(k-(n_b-1)), y(k-1), y(k-2), ..., y(k-n_ar), ]
 
-        Returns:
+        Parameters
+        ----------
+        u : np.ndarray
+            The input time series data.
+        y : np.ndarray
+            The output time series data.
+        n_b : int
+            The number of exogenous input terms to include. Default is 0.
+        n_ar : int
+            The number of autoregressive terms to include. Default is 0.
+        return_history : bool, optional
+            Whether to return the historical input-output data. Default is False.
+        n_hist_u : int, optional
+            The number of historical input terms to include. Default is 0.
+        n_hist_y : int, optional
+            The number of historical output terms to include. Default is 0.
+        output_as_tuple : bool, optional
+            Whether to return the output as a tuple. Default is False.
+        Returns
+        -------
         - Tuple[np.ndarray, np.ndarray] or Tuple[np.ndarray, np.ndarray, np.ndarray]:
             - x_data: The input data for the NARX model.
             - y_data: The output data for the NARX model.
@@ -92,12 +104,27 @@ class DataPreprocessor:
     @staticmethod
     def create_AE_model(y, n_window=1):
         """
-        Creates a dataset for an Autoencoder (AE) model by generating overlapping windows of the input data.
-        Parameters:
-        y (array-like): The input time series data.
-        n_window (int, optional): The size of the window to create overlapping segments. Default is 1.
-        Returns:
-        numpy.ndarray: A 2D array where each row is a window of the input data.
+        Creates a dataset for an Autoencoder (AE) model by generating
+        overlapping windows of the input data.
+
+        Output data is time series y(k) is
+        [
+            [y(0), y(1), ..., y(n_window-1)],
+            [y(1), y(2), ..., y(n_window)],
+            ...
+            [y(-n_window), y(-n_window+1), ..., y(-1)]
+        ]
+
+        Parameters ----------
+        y : array-like
+            The input time series data.
+        n_window : int, optional
+            The size of the window to create overlapping segments. Default is 1.
+
+        Returns
+        -------
+        numpy.ndarray
+            A 2D array where each row is a window of the input data.
         """
         y_data = []
         for k in range(0, len(y)-n_window+1):
@@ -111,6 +138,12 @@ class DataPreprocessor:
 
 
 class SimpleDataSet(Dataset):
+    """
+    A Pytorch Dataset wrapper for numpy array input and outputs.
+
+    Input can be a single numpy array or a tuple of numpy arrays.
+    Output is a single numpy array.
+    """
     def __init__(
         self,
         x_data: Union[np.ndarray, Tuple[np.ndarray, ...]],
@@ -145,7 +178,11 @@ class SimpleDataSet(Dataset):
 
 
 class DataLoaderNAB:
+    """
+    Class to interact with the Numenta Anomaly Benchmark(NAB) dataset time series anomaly data.
 
+    NAB repository: https://github.com/numenta/NAB
+    """
     @staticmethod
     def load_nab_dataset(root_dir, data_dir, label_json_file, window_json_file):
         """
@@ -244,27 +281,3 @@ class DataLoaderNAB:
             plt.show()
 
         return ax
-
-
-def main():
-    u = np.arange(0, 9)
-    y = np.arange(9, 18)
-    print(u)
-    print(y)
-
-    x, h, y_a = DataPreprocessor.create_NARX_model(
-        u, y, n_ar=0, n_b=3, return_history=True, n_hist_u=3, n_hist_y=3
-    )
-    print(x)
-    print(h)
-    print(y_a)
-
-    ds1 = SimpleDataSet((x, h), y_a)
-    ds2 = SimpleDataSet(x, y_a)
-
-    print(ds1[0:2])
-    print(ds2[0:2])
-
-
-if __name__ == "__main__":
-    main()
